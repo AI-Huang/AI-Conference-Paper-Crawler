@@ -4,6 +4,9 @@ uv.lock
 # Downloaded papers
 papers/
 
+# Scrapy HTTP response cache
+httpcache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
