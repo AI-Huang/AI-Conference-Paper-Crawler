@@ -5,6 +5,8 @@ description = "A Scrapy-based crawler for downloading AI conference papers (CVF/
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "pymysql>=1.2.0",
+    "python-dotenv>=1.2.1",
     "scrapy>=2.11",
 ]
 

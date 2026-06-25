@@ -4,6 +4,13 @@
 
 import os
 
+from dotenv import load_dotenv
+
+# Load environment variables from a local .env file (git-ignored) so secrets
+# such as DB credentials stay out of the source tree. override=True lets this
+# project's .env win over any stale shell variables from other projects.
+load_dotenv(override=True)
+
 BOT_NAME = "ai_conference_paper_crawler"
 
 SPIDER_MODULES = ["ai_conference_paper_crawler.spiders"]
@@ -40,6 +47,13 @@ HTTPCACHE_POLICY = "scrapy.extensions.httpcache.DummyPolicy"
 HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 # Don't cache error responses so transient failures are retried next run.
 HTTPCACHE_IGNORE_HTTP_CODES = [403, 404, 408, 429, 500, 502, 503, 504]
+
+# MySQL connection. Credentials are env-driven (see .env); never hardcode them.
+MYSQL_HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")
+MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
+MYSQL_USER = os.environ.get("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "")
+MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "ai_conference_paper_crawler")
 
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
