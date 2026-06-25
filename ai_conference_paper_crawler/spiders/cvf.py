@@ -14,6 +14,7 @@ Run with::
     scrapy crawl cvf                          # discover & crawl every conference
     scrapy crawl cvf -a conf=CVPR -a year=2026  # crawl a single edition directly
     scrapy crawl cvf -a year=2019               # every conference held in 2019
+    scrapy crawl cvf -a conf=CVPR -a year=2026 -a day=2026-06-05  # one day only
 """
 
 import re
@@ -38,10 +39,11 @@ class CvfSpider(scrapy.Spider):
     name = "cvf"
     allowed_domains = ["openaccess.thecvf.com"]
 
-    def __init__(self, conf=None, year=None, *args, **kwargs):
+    def __init__(self, conf=None, year=None, day=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conf = conf.upper() if conf else None
         self.year = str(year) if year else None
+        self.day = str(day) if day else None
 
     async def start(self):
         for request in self.start_requests():
@@ -50,9 +52,10 @@ class CvfSpider(scrapy.Spider):
     def start_requests(self):
         # Direct mode: jump straight to the requested conference page.
         if self.conf and self.year:
-            yield scrapy.Request(
-                f"{BASE_URL}{self.conf}{self.year}", callback=self.parse_conference
-            )
+            url = f"{BASE_URL}{self.conf}{self.year}"
+            if self.day:
+                url = f"{url}?day={self.day}"
+            yield scrapy.Request(url, callback=self.parse_conference)
         # Discovery mode: parse the site menu and crawl matching conferences.
         else:
             yield scrapy.Request(BASE_URL, callback=self.parse_menu)
@@ -88,12 +91,19 @@ class CvfSpider(scrapy.Spider):
                 file_urls=[resolve_pdf_url(href)],
             )
 
-        # Multi-day conferences list day sub-pages instead of papers. Prefer the
-        # aggregated "?day=all" page when offered; otherwise crawl each day.
+        # Multi-day conferences list day sub-pages instead of papers. Crawl each
+        # individual "?day=<date>" page rather than the aggregated "?day=all"
+        # page: per-day responses are much smaller and more reliable. An
+        # explicit ``-a day=<date>`` argument scopes the crawl to one day.
         if not pdf_links:
             day_hrefs = response.xpath('//a[contains(@href, "?day=")]/@href').getall()
-            all_day = [href for href in day_hrefs if href.endswith("day=all")]
-            for href in all_day or day_hrefs:
+            per_day = [href for href in day_hrefs if not href.endswith("day=all")]
+            candidates = per_day or day_hrefs
+            if self.day:
+                candidates = [
+                    href for href in candidates if href.endswith(f"day={self.day}")
+                ]
+            for href in candidates:
                 yield response.follow(href, callback=self.parse_conference)
 
     @staticmethod

@@ -132,10 +132,32 @@ def test_parse_conference_follows_each_day_when_no_all():
     }
 
 
-def test_parse_conference_prefers_day_all():
+def test_parse_conference_splits_day_all_into_per_day_pages():
     spider = CvfSpider()
     url = "https://openaccess.thecvf.com/CVPR2026"
     results = list(spider.parse_conference(_response(url, DAY_ALL_HTML)))
 
+    followed = {r.url for r in results}
+    # The aggregated "?day=all" page is skipped in favour of smaller, more
+    # reliable per-day sub-pages.
+    assert followed == {
+        "https://openaccess.thecvf.com/CVPR2026?day=2026-06-05",
+        "https://openaccess.thecvf.com/CVPR2026?day=2026-06-06",
+    }
+
+
+def test_parse_conference_scopes_to_requested_day():
+    spider = CvfSpider(day="2026-06-06")
+    url = "https://openaccess.thecvf.com/CVPR2026"
+    results = list(spider.parse_conference(_response(url, DAY_ALL_HTML)))
+
     followed = [r.url for r in results]
-    assert followed == ["https://openaccess.thecvf.com/CVPR2026?day=all"]
+    assert followed == ["https://openaccess.thecvf.com/CVPR2026?day=2026-06-06"]
+
+
+def test_direct_mode_with_day_requests_day_page():
+    spider = CvfSpider(conf="cvpr", year=2026, day="2026-06-05")
+    requests = list(spider.start_requests())
+    assert len(requests) == 1
+    assert requests[0].url == "https://openaccess.thecvf.com/CVPR2026?day=2026-06-05"
+    assert requests[0].callback == spider.parse_conference
