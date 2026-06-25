@@ -1,4 +1,5 @@
 .vscode/
+uv.lock
 
 # Downloaded papers
 papers/

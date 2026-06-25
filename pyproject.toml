@@ -1,0 +1,25 @@
+[project]
+name = "ai-conference-paper-crawler"
+version = "0.2.0"
+description = "A Scrapy-based crawler for downloading AI conference papers (CVF/CVPR and more)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "scrapy>=2.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/AI-Huang/AI-Conference-Paper-Crawler"
+Repository = "https://github.com/AI-Huang/AI-Conference-Paper-Crawler"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ai_conference_paper_crawler"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

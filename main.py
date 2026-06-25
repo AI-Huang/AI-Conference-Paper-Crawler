@@ -3,86 +3,35 @@
 # @Date    : Dec-20-20 20:28
 # @Author  : Kan Huang (kan.huang@connect.ust.hk)
 
-"""cvf_paper_downloader
+"""Convenience runner for the ai_conference_paper_crawler Scrapy project.
+
+This keeps ``python main.py`` working. For full control prefer the Scrapy CLI::
+
+    scrapy crawl cvf                            # discover & crawl every conference
+    scrapy crawl cvf -a conf=CVPR -a year=2026  # crawl a single edition
 """
-import os
-import requests
-from bs4 import BeautifulSoup
-from cvf_downloader.utils.dir_utils import makedir_exist_ok
 
-conf_urls = {
-    "CVPR2017": "https://openaccess.thecvf.com/CVPR2017",
-    "CVPR2018": {
-        "prefix": "https://openaccess.thecvf.com/CVPR2018",
-        "days": [
-            "2018-06-19",
-            "2018-06-20",
-            "2018-06-21"
-        ]
-    },
-    "CVPR2019": "https://openaccess.thecvf.com/CVPR2019",
-    "CVPR2020": "https://openaccess.thecvf.com/CVPR2020"
-}
+import argparse
 
+from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
 
-def get_conf_url(conf, **kwargs):
-    """
-    docstring
-    """
-    if "day_index" in kwargs:
-        day_index = kwargs["day_index"]
-
-    if conf == "CVPR2017":
-        conf_url = conf_urls[conf]
-    else:
-        prefix = conf_urls[conf]
-        day = conf_urls[conf][day_index]
-
-    return conf_url
-
-
-def _download(url, headers="", folder="", filename="", retried=0):
-    """_download
-    # Arguments:
-        url:
-    """
-    from urllib.parse import urlparse
-    filename = filename if filename else os.path.basename((urlparse(url).path))
-
-    if not os.path.isdir(folder):
-        makedir_exist_ok(folder)
-    filepath = os.path.join(folder, filename)
-
-    data = requests.get(url).content
-    with open(filepath, "wb") as f:
-        f.write(data)
-    print(f"Downloaded to {filepath}.")
-
-
-def download(conf):
-    conf_url = get_conf_url(conf)
-    page_html = requests.get(conf_url).content
-    page_html = page_html.decode("utf-8")
-    with open("CVPR2017.html", "w", encoding="utf-8") as f:
-        f.write(page_html)
-
-    soup = BeautifulSoup(page_html, "lxml")
-    all_pdf_a = soup.find_all("a", text="pdf")
-    pdf_href_list = [a["href"] for a in all_pdf_a]
-
-    # print(len(pdf_href_list))  # 783
-
-    # download papers in the list
-    host_root = "https://openaccess.thecvf.com/"
-    from urllib.parse import urljoin
-    for pdf_href in pdf_href_list:
-        pdf_href = urljoin(host_root, pdf_href)
-        print(pdf_href)
-        _download(pdf_href, folder=os.path.join(".", "papers", conf))
+from ai_conference_paper_crawler.spiders.cvf import CvfSpider
 
 
 def main():
-    download(conf="CVPR2017")
+    parser = argparse.ArgumentParser(description="Download CVF conference papers.")
+    parser.add_argument(
+        "--conf", default=None, help="Conference key, e.g. CVPR (omit to discover all)"
+    )
+    parser.add_argument(
+        "--year", default=None, help="Conference year, e.g. 2026 (omit to discover all)"
+    )
+    args = parser.parse_args()
+
+    process = CrawlerProcess(get_project_settings())
+    process.crawl(CvfSpider, conf=args.conf, year=args.year)
+    process.start()
 
 
 if __name__ == "__main__":
