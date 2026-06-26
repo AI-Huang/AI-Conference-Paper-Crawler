@@ -24,21 +24,33 @@ AUTOTHROTTLE_ENABLED = True
 CONCURRENT_REQUESTS = 8
 CONCURRENT_REQUESTS_PER_DOMAIN = 4
 
-# File downloading pipeline. PDFs are stored under FILES_STORE/<conf>/<name>.pdf
+# Pipelines: download PDFs (only when the item carries file_urls) then persist
+# metadata to MySQL. PDFs land under FILES_STORE/<conf>/<year>/<name>.pdf.
 ITEM_PIPELINES = {
     "ai_conference_paper_crawler.pipelines.CvfFilesPipeline": 1,
+    "ai_conference_paper_crawler.pipelines.MySQLPipeline": 300,
 }
 
+# Code-Data separation: keep all runtime data (downloaded papers, HTTP cache)
+# out of the source tree under $HOME/Data/<ProjectName>. The repo-local `data/`
+# path is a symlink to this directory. Override the base with CVF_DATA_DIR.
+DATA_DIR = os.environ.get(
+    "CVF_DATA_DIR",
+    os.path.join(os.path.expanduser("~"), "Data", "AI-Conference-Paper-Crawler"),
+)
+
 # Where downloaded papers are stored. Env-driven so runtime data can be kept
-# separate from source code; defaults to the repo-local (git-ignored) folder.
-FILES_STORE = os.environ.get("CVF_FILES_STORE", "papers")
+# separate from source code; defaults to <DATA_DIR>/papers.
+FILES_STORE = os.environ.get("CVF_FILES_STORE", os.path.join(DATA_DIR, "papers"))
 
 # HTTP response cache. Caches conference/day listing pages so re-runs and
 # development iterate without re-hitting the source site (kinder to the server
-# and much faster). Env-driven and git-ignored to keep runtime data out of the
-# source tree. Disable with HTTPCACHE_ENABLED=0.
+# and much faster). Env-driven and kept out of the source tree under DATA_DIR.
+# Disable with HTTPCACHE_ENABLED=0.
 HTTPCACHE_ENABLED = os.environ.get("HTTPCACHE_ENABLED", "1") != "0"
-HTTPCACHE_DIR = os.environ.get("HTTPCACHE_DIR", "httpcache")
+HTTPCACHE_DIR = os.environ.get(
+    "HTTPCACHE_DIR", os.path.join(DATA_DIR, ".scrapy", "httpcache")
+)
 # Cache freshness in seconds (0 = never expire). One week by default.
 HTTPCACHE_EXPIRATION_SECS = int(os.environ.get("HTTPCACHE_EXPIRATION_SECS", 604800))
 # The CVF site sends no cache headers, so use the Dummy policy: cache every

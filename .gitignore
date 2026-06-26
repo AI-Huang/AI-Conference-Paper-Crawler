@@ -1,6 +1,13 @@
 .vscode/
 uv.lock
 
+# CodeGraph local index
+.codegraph/
+
+# Runtime data lives under $HOME/Data/<ProjectName>; `data/` is a symlink to it
+data
+data/
+
 # Downloaded papers
 papers/
 

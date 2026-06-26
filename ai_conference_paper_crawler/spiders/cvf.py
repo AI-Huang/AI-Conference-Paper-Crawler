@@ -39,11 +39,13 @@ class CvfSpider(scrapy.Spider):
     name = "cvf"
     allowed_domains = ["openaccess.thecvf.com"]
 
-    def __init__(self, conf=None, year=None, day=None, *args, **kwargs):
+    def __init__(self, conf=None, year=None, day=None, download=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conf = conf.upper() if conf else None
         self.year = str(year) if year else None
         self.day = str(day) if day else None
+        # Download PDFs only when explicitly requested; metadata always persists.
+        self.download = str(download).lower() in ("1", "true", "yes", "on")
 
     async def start(self):
         for request in self.start_requests():
@@ -82,14 +84,35 @@ class CvfSpider(scrapy.Spider):
             href = link.xpath("@href").get()
             if not href:
                 continue
-            title = link.xpath("ancestor::dd/preceding-sibling::dt[1]//a/text()").get()
-            yield PaperItem(
+            dt = link.xpath("ancestor::dd/preceding-sibling::dt[1]")
+            title = dt.xpath(".//a/text()").get()
+            detail_href = dt.xpath(".//a/@href").get()
+            # Listing-page authors as a fallback if the detail page is missing.
+            authors_fallback = link.xpath(
+                'ancestor::dd//form[@class="authsearch"]//a/text()'
+            ).getall()
+            pdf_url = resolve_pdf_url(href)
+            item = PaperItem(
                 conference=conf,
                 year=int(year) if year else None,
                 title=(title or "").strip(),
+                authors=[a.strip(" ,\n") for a in authors_fallback if a.strip(" ,\n")],
+                abstract="",
                 source_page=response.url,
-                file_urls=[resolve_pdf_url(href)],
+                pdf_url=pdf_url,
+                # Trigger the files pipeline only in download mode.
+                file_urls=[pdf_url] if self.download else [],
             )
+            # Prefer the detail page: its byline carries the full author list and
+            # the abstract. Fall back to the listing-only item when absent.
+            if detail_href:
+                yield response.follow(
+                    detail_href,
+                    callback=self.parse_paper,
+                    cb_kwargs={"item": item},
+                )
+            else:
+                yield item
 
         # Multi-day conferences list day sub-pages instead of papers. Crawl each
         # individual "?day=<date>" page rather than the aggregated "?day=all"
@@ -105,6 +128,23 @@ class CvfSpider(scrapy.Spider):
                 ]
             for href in candidates:
                 yield response.follow(href, callback=self.parse_conference)
+
+    def parse_paper(self, response, item):
+        """Enrich a paper item with authors and abstract from its detail page.
+
+        CVF detail pages expose a ``#authors`` byline (full author list inside
+        an ``<i>``) and a ``#abstract`` block. The byline is preferred over the
+        listing-page authors; the abstract is best-effort and may be empty.
+        """
+        byline = response.xpath('//div[@id="authors"]//i/text()').get()
+        if byline:
+            authors = [name.strip() for name in byline.split(",") if name.strip()]
+            if authors:
+                item["authors"] = authors
+
+        abstract = response.xpath('//div[@id="abstract"]/text()').get()
+        item["abstract"] = (abstract or "").strip()
+        yield item
 
     @staticmethod
     def _conf_year_from_url(url):

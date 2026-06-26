@@ -12,6 +12,8 @@ class PaperItem(scrapy.Item):
     year = scrapy.Field()  # conference year, e.g. 2017
     title = scrapy.Field()  # paper title (best-effort)
     authors = scrapy.Field()  # list of author names (best-effort)
+    abstract = scrapy.Field()  # paper abstract (best-effort, may be empty)
     source_page = scrapy.Field()  # listing page the paper was found on
-    file_urls = scrapy.Field()  # consumed by the files pipeline
+    pdf_url = scrapy.Field()  # resolved absolute PDF URL (always set)
+    file_urls = scrapy.Field()  # consumed by the files pipeline (download mode only)
     files = scrapy.Field()  # populated by the files pipeline

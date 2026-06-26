@@ -27,10 +27,15 @@ def main():
     parser.add_argument(
         "--year", default=None, help="Conference year, e.g. 2026 (omit to discover all)"
     )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Also download paper PDFs (default: metadata only, no download)",
+    )
     args = parser.parse_args()
 
     process = CrawlerProcess(get_project_settings())
-    process.crawl(CvfSpider, conf=args.conf, year=args.year)
+    process.crawl(CvfSpider, conf=args.conf, year=args.year, download=args.download)
     process.start()
 
 

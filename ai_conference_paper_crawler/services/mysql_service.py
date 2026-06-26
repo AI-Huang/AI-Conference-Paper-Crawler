@@ -56,6 +56,32 @@ CREATE TABLE IF NOT EXISTS papers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """
 
+_CREATE_SPEED_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS crawl_speed_history (
+    id              BIGINT       NOT NULL AUTO_INCREMENT,
+    ts              DOUBLE       NOT NULL,
+    recorded_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total           INT          NOT NULL,
+    delta           INT          NOT NULL DEFAULT 0,
+    rate_instant    DOUBLE       NOT NULL DEFAULT 0,
+    rate_avg        DOUBLE       NOT NULL DEFAULT 0,
+    rate_ema        DOUBLE       NOT NULL DEFAULT 0,
+    with_local_path INT          NULL,
+    with_abstract   INT          NULL,
+    PRIMARY KEY (id),
+    KEY idx_ts (ts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+"""
+
+_INSERT_SPEED_SQL = """
+INSERT INTO crawl_speed_history
+    (ts, total, delta, rate_instant, rate_avg, rate_ema,
+     with_local_path, with_abstract)
+VALUES
+    (%(ts)s, %(total)s, %(delta)s, %(rate_instant)s, %(rate_avg)s, %(rate_ema)s,
+     %(with_local_path)s, %(with_abstract)s)
+"""
+
 _UPSERT_SQL = """
 INSERT INTO papers
     (paper_id, conference, year, title, authors, pdf_url,
@@ -156,6 +182,35 @@ class MySQLService:
             cursor.execute(_CREATE_TABLE_SQL)
         conn.commit()
 
+    def ensure_speed_schema(self):
+        """Create the ``crawl_speed_history`` table if it does not exist."""
+        conn = self.connect()
+        with conn.cursor() as cursor:
+            cursor.execute(_CREATE_SPEED_TABLE_SQL)
+        conn.commit()
+
+    def record_speed(self, stats):
+        """Persist one crawl-speed sample.
+
+        Accepts a :class:`~..monitor.metrics.Stats` (anything with
+        ``to_dict``) or a plain dict shaped like ``Stats.to_dict()``.
+        """
+        data = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats)
+        params = {
+            "ts": float(data.get("ts") or 0.0),
+            "total": int(data.get("total") or 0),
+            "delta": int(data.get("delta") or 0),
+            "rate_instant": float(data.get("rate_instant") or 0.0),
+            "rate_avg": float(data.get("rate_avg") or 0.0),
+            "rate_ema": float(data.get("rate_ema") or 0.0),
+            "with_local_path": data.get("with_local_path"),
+            "with_abstract": data.get("with_abstract"),
+        }
+        conn = self.connect()
+        with conn.cursor() as cursor:
+            cursor.execute(_INSERT_SPEED_SQL, params)
+        conn.commit()
+
     def upsert_paper(self, record):
         """Insert or update a single paper record. Returns affected row count."""
         conn = self.connect()
@@ -183,6 +238,40 @@ class MySQLService:
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM papers WHERE paper_id = %s", (paper_id,))
             return cursor.fetchone()
+
+    def load_speed_history(self, limit=500, since=None):
+        """Return persisted speed samples in chronological (ascending) order.
+
+        Each item is a render-ready dict: ``{t, total, delta, instant, avg,
+        ema}``. ``limit`` caps how many of the most recent rows are returned;
+        ``since`` (epoch seconds) optionally restricts to newer samples.
+        """
+        conn = self.connect()
+        clauses, params = [], []
+        if since is not None:
+            clauses.append("ts >= %s")
+            params.append(float(since))
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(int(limit))
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT ts, total, delta, rate_instant, rate_avg, rate_ema "
+                f"FROM crawl_speed_history{where} ORDER BY ts DESC LIMIT %s",
+                params,
+            )
+            rows = cursor.fetchall()
+        rows.reverse()  # oldest first for charting
+        return [
+            {
+                "t": float(r["ts"]),
+                "total": int(r["total"]),
+                "delta": int(r["delta"]),
+                "instant": float(r["rate_instant"]),
+                "avg": float(r["rate_avg"]),
+                "ema": float(r["rate_ema"]),
+            }
+            for r in rows
+        ]
 
     def count_papers(self, conference=None, year=None):
         """Count stored papers, optionally filtered by conference/year."""
