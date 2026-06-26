@@ -223,6 +223,21 @@ class CrawlStatsCollector:
             self.last_persist_error = str(exc)
             return []
 
+    def load_paper_history(self, bucket_seconds=60, since=None):
+        """Return the crawl-speed curve reconstructed from ``papers.scraped_at``.
+
+        This reflects when papers were actually stored, so the series reaches
+        back to the start of the crawl even if the monitor was not running then.
+        Returns an empty list if the table is unreadable.
+        """
+        try:
+            return self.service.load_paper_history(
+                bucket_seconds=bucket_seconds, since=since
+            )
+        except Exception as exc:  # history is best-effort
+            self.last_persist_error = str(exc)
+            return []
+
     def close(self):
         self.service.close()
 

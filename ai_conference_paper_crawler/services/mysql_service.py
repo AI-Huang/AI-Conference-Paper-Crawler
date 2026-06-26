@@ -273,6 +273,56 @@ class MySQLService:
             for r in rows
         ]
 
+    def load_paper_history(self, bucket_seconds=60, ema_alpha=0.3, since=None):
+        """Reconstruct the crawl-speed curve from ``papers.scraped_at``.
+
+        Unlike :meth:`load_speed_history` (which only has rows from when the
+        monitor was running), this derives the *actual* crawl timeline from when
+        each paper was stored, so a dashboard can show history reaching back to
+        the start of the crawl. Papers are grouped into ``bucket_seconds`` time
+        buckets; each item is a render-ready dict ``{t, total, delta, instant,
+        avg, ema}`` where ``t`` is the bucket-start epoch (UTC) and rates are in
+        items/min.
+        """
+        bucket = max(1, int(bucket_seconds))
+        # TIMESTAMPDIFF treats scraped_at (stored as a UTC wall-clock DATETIME)
+        # as UTC, yielding a true epoch regardless of the server time zone.
+        epoch_expr = "TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', scraped_at)"
+        clauses = ["scraped_at IS NOT NULL"]
+        params = [bucket, bucket]
+        if since is not None:
+            clauses.append(f"{epoch_expr} >= %s")
+            params.append(float(since))
+        where = " AND ".join(clauses)
+        conn = self.connect()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"SELECT FLOOR({epoch_expr} / %s) * %s AS bucket, COUNT(*) AS n "
+                f"FROM papers WHERE {where} GROUP BY bucket ORDER BY bucket",
+                params,
+            )
+            rows = cursor.fetchall()
+
+        out, cumulative, ema = [], 0, None
+        for r in rows:
+            n = int(r["n"])
+            cumulative += n
+            instant = n / bucket * 60.0
+            ema = (
+                instant if ema is None else ema_alpha * instant + (1 - ema_alpha) * ema
+            )
+            out.append(
+                {
+                    "t": float(r["bucket"]),
+                    "total": cumulative,
+                    "delta": n,
+                    "instant": round(instant, 2),
+                    "avg": round(instant, 2),
+                    "ema": round(ema, 2),
+                }
+            )
+        return out
+
     def count_papers(self, conference=None, year=None):
         """Count stored papers, optionally filtered by conference/year."""
         conn = self.connect()

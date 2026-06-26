@@ -105,8 +105,13 @@ def run_tui(interval=5.0, target=None, window=12, persist=True):
     with CrawlStatsCollector(
         target=target, window=window, persist=persist
     ) as collector:
-        # Seed the sparkline with persisted EMA history from earlier samples.
-        for sample in collector.load_history(limit=rate_history.maxlen):
+        # Seed the sparkline with the real crawl history (from papers.scraped_at)
+        # so it reaches back to the start of the crawl, then fall back to the
+        # monitor's own persisted samples if no papers are stored yet.
+        seed = collector.load_paper_history() or collector.load_history(
+            limit=rate_history.maxlen
+        )
+        for sample in seed[-rate_history.maxlen :]:
             rate_history.append(sample["ema"])
         with Live(auto_refresh=False, screen=False) as live:
             try:
