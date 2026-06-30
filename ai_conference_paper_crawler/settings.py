@@ -60,6 +60,10 @@ HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 # Don't cache error responses so transient failures are retried next run.
 HTTPCACHE_IGNORE_HTTP_CODES = [403, 404, 408, 429, 500, 502, 503, 504]
 
+# IEEE Xplore Developer API key — required for the ieee spider (IROS, etc.).
+# Register for a free key at https://developer.ieee.org/ and add it to .env.
+IEEE_API_KEY = os.environ.get("IEEE_API_KEY", "")
+
 # MySQL connection. Credentials are env-driven (see .env); never hardcode them.
 MYSQL_HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))

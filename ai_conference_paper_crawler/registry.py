@@ -21,6 +21,7 @@ class Family:
     CVF = "cvf"  # openaccess.thecvf.com
     NEURIPS = "neurips"  # proceedings.neurips.cc
     PMLR = "pmlr"  # proceedings.mlr.press
+    IEEE = "ieee"  # ieeexplore.ieee.org (via ieeexploreapi.ieee.org Developer API)
 
 
 class RegistryError(ValueError):
@@ -84,6 +85,14 @@ class Conference:
 _CVF_TEMPLATE = "https://openaccess.thecvf.com/{key}{year}"
 _NEURIPS_TEMPLATE = "https://proceedings.neurips.cc/paper_files/paper/{year}"
 
+# IEEE Xplore proceedings URL template; the spider extracts the publication
+# number from the path to call the IEEE Developer API.
+_IEEE_PROCEEDINGS = "https://ieeexplore.ieee.org/xpl/conhome/{pub_num}/proceeding"
+
+
+def _iros(year: int, pub_num: int) -> str:
+    return _IEEE_PROCEEDINGS.format(pub_num=pub_num)
+
 
 # Registered conferences. Years reflect the editions published by each site
 # family; extend a tuple (or add a Conference) to support more editions.
@@ -105,6 +114,27 @@ _CONFERENCES: Tuple[Conference, ...] = (
             2021: "https://proceedings.mlr.press/v139/",
             2022: "https://proceedings.mlr.press/v162/",
             2023: "https://proceedings.mlr.press/v202/",
+        },
+    ),
+    # IEEE family — ieeexplore.ieee.org (crawled via IEEE Developer API).
+    # Publication numbers map each IROS year to its IEEE Xplore proceeding.
+    # Verify or extend at: https://ieeexplore.ieee.org/browse/conferences/title
+    Conference(
+        "IROS",
+        Family.IEEE,
+        (2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023),
+        url_overrides={
+            2013: _iros(2013, 6696430),
+            2014: _iros(2014, 6942228),
+            2015: _iros(2015, 7353456),
+            2016: _iros(2016, 7759096),
+            2017: _iros(2017, 8202183),
+            2018: _iros(2018, 8593375),
+            2019: _iros(2019, 8959283),
+            2020: _iros(2020, 9340924),
+            2021: _iros(2021, 9635848),
+            2022: _iros(2022, 9981000),
+            2023: _iros(2023, 10341341),
         },
     ),
 )

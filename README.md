@@ -19,6 +19,10 @@ scrapy crawl cvf -a conf=CVPR2017
 
 # Multi-day conferences accept a day index
 scrapy crawl cvf -a conf=CVPR2018 -a day_index=0
+
+# IROS — requires a free IEEE Developer API key (see below)
+scrapy crawl ieee -a conf=IROS -a year=2023
+scrapy crawl ieee -a conf=IROS          # all supported IROS years (2013–2023)
 ```
 
 Or via the convenience runner:
@@ -29,6 +33,24 @@ python main.py --conf CVPR2017
 
 Downloaded PDFs are stored under `papers/<conf>/`. Override the location with the
 `CVF_FILES_STORE` environment variable.
+
+### IEEE Xplore conferences (IROS)
+
+Papers from IEEE Xplore (e.g. IROS) are accessed through the
+[IEEE Xplore Developer API](https://developer.ieee.org/).
+
+1. Register for a **free API key** at <https://developer.ieee.org/>.
+2. Add it to your `.env`:
+   ```
+   IEEE_API_KEY=your_key_here
+   ```
+3. Run the spider:
+   ```bash
+   scrapy crawl ieee -a conf=IROS -a year=2023
+   ```
+
+> **Note:** Paper metadata (title, authors, abstract) is always available.
+> Downloading full-text PDFs requires institutional access to IEEE Xplore.
 
 ## Live speed dashboard
 
