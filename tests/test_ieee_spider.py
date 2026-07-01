@@ -96,10 +96,12 @@ def test_direct_mode_single_year_emits_one_request():
 def test_direct_mode_no_year_emits_request_per_registered_year():
     spider = _make_spider(conf="IROS")
     requests = list(spider.start_requests())
-    # IROS has 11 registered years (2013-2023)
-    assert len(requests) == 11
+    # IROS has 13 registered years (2013-2025)
+    assert len(requests) == 13
     urls = [r.url for r in requests]
     assert any("10341341" in u for u in urls)  # 2023
+    assert any("10801613" in u for u in urls)  # 2024
+    assert any("11245651" in u for u in urls)  # 2025
 
 
 def test_no_conf_crawls_all_ieee_conferences():
