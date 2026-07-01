@@ -9,6 +9,7 @@
 #   ./run.sh ICCV 2023 --day 2023-10-04
 #   ./run.sh IROS 2024                     # IROS via IEEE Developer API
 #   ./run.sh IROS 2024 --resume            # resume an interrupted IROS crawl
+#   ./run.sh IROS 2024 --bg               # run in background, log to file
 #   ./run.sh CVPR 2026 --max 10            # stop after ~10 papers (testing)
 #   ./run.sh                               # discover & crawl every conference
 #
@@ -18,6 +19,8 @@
 #   --resume         Resume an interrupted crawl from its saved checkpoint.
 #                    Checkpoint is stored under crawl-jobs/<CONF>-<YEAR>/.
 #   --jobdir <DIR>   Explicitly set Scrapy JOBDIR (implies resume if dir exists).
+#   --bg             Run in background; log written to $DATA_DIR/logs/<slug>.log.
+#                    Follow output with: tail -f <logfile>
 #   --max <N>        Stop after roughly N items (sets CLOSESPIDER_ITEMCOUNT).
 #   --log <LEVEL>    Scrapy log level (default INFO).
 #   -h, --help       Show this help.
@@ -35,7 +38,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 usage() {
-    sed -n '5,29p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '5,32p' "$0" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
@@ -46,6 +49,7 @@ MAX=""
 LOG_LEVEL="INFO"
 DOWNLOAD=0
 RESUME=0
+BG=0
 JOBDIR_OVERRIDE=""
 
 # First one or two positional args are conference and year.
@@ -75,6 +79,10 @@ while [[ $# -gt 0 ]]; do
     --jobdir)
         JOBDIR_OVERRIDE="${2:?--jobdir requires a directory path}"
         shift 2
+        ;;
+    --bg)
+        BG=1
+        shift
         ;;
     --max)
         MAX="${2:?--max requires a number}"
@@ -108,13 +116,24 @@ done
 
 # ---- JOBDIR (断点续传) -------------------------------------------------------
 # Determine JOBDIR: explicit override > --resume auto-path > none.
+slug="${CONF_UPPER:-all}"
+[[ -n "$YEAR" ]] && slug="${slug}-${YEAR}"
+
 JOBDIR=""
 if [[ -n "$JOBDIR_OVERRIDE" ]]; then
     JOBDIR="$JOBDIR_OVERRIDE"
 elif [[ "$RESUME" == "1" ]]; then
-    slug="${CONF_UPPER:-all}"
-    [[ -n "$YEAR" ]] && slug="${slug}-${YEAR}"
     JOBDIR="crawl-jobs/${slug}"
+fi
+
+# ---- Log file (后台模式) -----------------------------------------------------
+# Log files go under $DATA_DIR/logs/ (Code-Data separation).
+DATA_DIR="${CVF_DATA_DIR:-$HOME/Data/AI-Conference-Paper-Crawler}"
+LOG_DIR="$DATA_DIR/logs"
+LOG_FILE=""
+if [[ "$BG" == "1" ]]; then
+    mkdir -p "$LOG_DIR"
+    LOG_FILE="$LOG_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
 fi
 
 # ---- Build the scrapy command -----------------------------------------------
@@ -139,4 +158,15 @@ fi
 pdf_label=$([[ $DOWNLOAD == 1 ]] && echo '[+PDF]' || echo '[metadata only]')
 echo "Spider: $SPIDER | Crawling: ${CONF_UPPER:-<all>} ${YEAR:-} ${DAY:+(day $DAY)}${MAX:+ (max $MAX)} $pdf_label$label_resume"
 
-exec "${cmd[@]}"
+# ---- Launch -----------------------------------------------------------------
+if [[ "$BG" == "1" ]]; then
+    # Run detached; stdout+stderr → log file (unbuffered via stdbuf).
+    nohup stdbuf -oL -eL "${cmd[@]}" >> "$LOG_FILE" 2>&1 &
+    PID=$!
+    echo "Started in background (PID=$PID)"
+    echo "Log:  $LOG_FILE"
+    echo "Follow: tail -f $LOG_FILE"
+    echo "Stop:   kill $PID"
+else
+    exec "${cmd[@]}"
+fi
